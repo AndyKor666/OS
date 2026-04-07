@@ -1,0 +1,51 @@
+import socket
+import os
+import sys
+import winreg
+import time
+
+SERVER_IP = '127.0.0.1'
+SERVER_PORT = 4001
+
+def add_to_startup():
+    try:
+        script_path = os.path.abspath(__file__)
+        python_exe = sys.executable
+        autorun_val = f'"{python_exe}" "{script_path}"'
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0, winreg.KEY_ALL_ACCESS
+        )
+        winreg.SetValueEx(key, "VintageClientMonitor", 0, winreg.REG_SZ, autorun_val)
+        winreg.CloseKey(key)
+        print("Successfully added to Windows Startup.")
+    except Exception as e:
+        print(f"Failed to add to startup: {e}")
+
+def start_client():
+    hostname = socket.gethostname()
+    print(f"Initializing client: {hostname}")
+    print(f"Attempting to connect to {SERVER_IP}:{SERVER_PORT} . . .")
+
+    while True:
+        try:
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.connect((SERVER_IP, SERVER_PORT))
+            client.send(hostname.encode())
+            print("Connection Established! Status: ONLINE")
+            while True:
+                client.send(b"PING")
+                time.sleep(5)
+        except ConnectionRefusedError:
+            print("Server is down. Retrying in 5 seconds . . .")
+            time.sleep(5)
+        except Exception as e:
+            print(f"Connection lost: {e}. Reconnecting . . .")
+            time.sleep(5)
+        finally:
+            client.close()
+
+if __name__ == "__main__":
+    add_to_startup()
+    start_client()
